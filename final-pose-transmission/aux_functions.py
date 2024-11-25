@@ -2,7 +2,8 @@ import numpy as np
 import multiprocessing as mp
 import queue  # To handle queue.Empty exception
 import time
-from threads_functions import visual_perception_loop, odometry_loop
+from threads_functions import visual_perception_loop
+import socket
 
 
 def sensor_fusion(visual_pose, odometry_pose, visual_weight=2, odometry_weight=0):
@@ -103,3 +104,38 @@ def loggin_stuff(visual_pose_plot,visual_pose,dt_plot,current_loop_time,last_con
     
     dt_plot[i] = current_loop_time - last_control_time
     t_plot[i] = current_time - start_time
+
+
+def initialize_streaming():
+    # Set up the UDP communication
+    UDP_IP = "10.214.78.208"  # ESP32 IP Address
+    UDP_PORT_SEND = 12345  # Port to send commands to ESP32
+    UDP_PORT_RECEIVE = 12346  # Port to receive data from ESP32
+    BUFFER_SIZE = 1024  # Buffer size for receiving data
+    TIMEOUT = 5  # Timeout for receiving handshake
+
+    # Create UDP sockets for sending and receiving
+    send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    receive_socket.bind(("", UDP_PORT_RECEIVE))
+    receive_socket.settimeout(TIMEOUT)
+
+    # Handshake: Send "Hello" and wait for "ACK"
+    try:
+        print("Sending handshake...")
+        send_socket.sendto("Hello".encode(), (UDP_IP, UDP_PORT_SEND))
+
+        # Wait for response
+        response, addr = receive_socket.recvfrom(BUFFER_SIZE)
+        if response.decode() == "ACK":
+            print("Handshake successful!")
+        else:
+            print("Unexpected response during handshake:", response.decode())
+    except socket.timeout:
+        print("Handshake failed: Timeout")
+        return None, None, None
+    except socket.error as e:
+        print(f"Socket error during handshake: {e}")
+        return None, None, None
+
+    return send_socket, UDP_IP, UDP_PORT_SEND

@@ -4,16 +4,20 @@ import multiprocessing as mp
 import numpy as np
 import time
 import queue  # To handle queue.Empty exception
+import socket
 from robot_functions import (
     plotting_visual_vs_odometry, plot_against_time, plot_dt
 )
 from initialize_odometry_test_parameters import (initialize_parameters, initialize_states)
-from aux_functions import (sensor_fusion, low_pass_filter, initialize_queues_processes,wait_for_data, check_system_status, retrieve_pose, loggin_stuff)
+from aux_functions import (sensor_fusion, low_pass_filter, initialize_queues_processes,wait_for_data, check_system_status, retrieve_pose, loggin_stuff, initialize_streaming)
 
 
 def main():
     # Set previous pose when queue is empty
     previous_visual_pose = np.array([0, 0, 0])
+
+    #send_socket, UDP_IP, UDP_PORT_SEND = initialize_streaming()
+
 
     manager,visual_pose_queue, visual_ready,processes = initialize_queues_processes()
     wait_for_data(visual_ready,visual_pose_queue)
@@ -40,11 +44,17 @@ def main():
                 
                 # Retrieve actual pose
                 visual_pose, previous_visual_pose = retrieve_pose(visual_pose_queue, previous_visual_pose, "visual_pose")                
-                
   
                 visual_pose = low_pass_filter(visual_pose, previous_visual_pose, alpha=0.05) # Apply Low-Pass Filter to Fused Pose
-                
-                previous_visual_pose = visual_pose      
+                previous_visual_pose = visual_pose
+
+                command_message = f"{visual_pose[0]},{visual_pose[1]},{visual_pose[2]},{float(i)}"      
+
+                try:
+                    send_socket.sendto(command_message.encode(), (UDP_IP, UDP_PORT_SEND))
+                    print(f"Sent wheel speeds = {visual_pose}")
+                except socket.error as e:
+                    print(f"Socket error during sending: {e}")
 
                 # Time and Logging stuff
                 current_loop_time = time.perf_counter()
